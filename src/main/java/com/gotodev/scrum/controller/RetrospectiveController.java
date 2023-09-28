@@ -2,7 +2,7 @@ package com.gotodev.scrum.controller;
 
 import com.gotodev.scrum.model.Feedback;
 import com.gotodev.scrum.model.Retrospective;
-import com.gotodev.scrum.repository.RetrospectiveRepository;
+import com.gotodev.scrum.service.RetrospectiveService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,17 +21,14 @@ import java.util.Optional;
 @RestController
 @RequestMapping(value = "/retro", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
 public class RetrospectiveController {
-
-
     private static final Logger LOGGER= LoggerFactory.getLogger(RetrospectiveController.class);
+
     @Autowired
-    private RetrospectiveRepository retrospectiveRepository;
+    private RetrospectiveService retrospectiveService;
 
     @PostMapping("")
     public ResponseEntity<String> createRetrospective(@RequestBody @Valid final Retrospective retrospective) {
-        retrospectiveRepository.save(retrospective);
-
-        LOGGER.info("Created new retro {}, ", retrospective);
+        retrospectiveService.create(retrospective);
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -43,23 +40,19 @@ public class RetrospectiveController {
                                                     @RequestParam(value = "pageSize", defaultValue = "2", required = false) int pageSize) {
 
         Pageable pageable = PageRequest.of(currentPage, pageSize);
-        return retrospectiveRepository.findAll(pageable).getContent();
+        return retrospectiveService.findAll(pageable).getContent();
     }
 
     @GetMapping("/date")
     public List<Retrospective> getAllRetrospectives(@RequestParam(value = "filter", required = false) LocalDate date) {
-        return retrospectiveRepository.findByDate(date);
+        return retrospectiveService.findByDate(date);
     }
 
     @PostMapping("/{id}/feedback")
     public ResponseEntity<String> addFeedbackToRetrospective(@PathVariable final String id, @RequestBody final Feedback feedback) {
-        Optional<Retrospective> retro = retrospectiveRepository.findById(id);
+        Optional<Retrospective> retro = retrospectiveService.findById(id);
         if (retro.isPresent()) {
-            Retrospective result = retro.get();
-            result.getFeedback().add(feedback);
-
-            LOGGER.info("Added feedback to retro {}, ", feedback);
-            retrospectiveRepository.save(result);
+            retrospectiveService.addFeedback(retro.get(), feedback);
 
             return ResponseEntity.status(HttpStatus.CREATED)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -73,28 +66,19 @@ public class RetrospectiveController {
 
     @PatchMapping("/{id}/feedback/{fId}")
     public ResponseEntity<String> updateRetrospectiveFeedback(@PathVariable final String id, @PathVariable final Integer fId, @RequestBody final Feedback feedback) {
-        Optional<Retrospective> retro = retrospectiveRepository.findById(id);
+        Optional<Retrospective> retro = retrospectiveService.findById(id);
         if (retro.isPresent()) {
-            Retrospective result = retro.get();
+            boolean feedbackUpdated = retrospectiveService.updateFeedback(retro.get(), fId, feedback);
 
-            for (int i = 0; i < result.getFeedback().size(); i++) {
-                if (result.getFeedback().get(i).getId() == fId) {
-                    result.getFeedback().get(i).setBody(feedback.getBody());
-                    result.getFeedback().get(i).setType(feedback.getType());
-
-                    LOGGER.info("Updated feedback to retro {}, ", feedback);
-
-                    retrospectiveRepository.save(result);
-
-                    return ResponseEntity.status(HttpStatus.CREATED)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .body("Successfully updated");
-                }
+            if (feedbackUpdated) {
+                return ResponseEntity.status(HttpStatus.CREATED)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("Successfully updated");
+            } else {
+                return ResponseEntity.status(HttpStatus.NO_CONTENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("Feedback not found");
             }
-
-            return ResponseEntity.status(HttpStatus.NO_CONTENT)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body("Feedback not found");
 
         }
 

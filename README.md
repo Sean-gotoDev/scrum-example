@@ -18,6 +18,7 @@
 ## Adding/Viewing Data
 ### Add new retro items
 ```
+Content-Type: application/json
 POST http://localhost:8080/retro
 ```
 ```json
